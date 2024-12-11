@@ -8,12 +8,8 @@ import Papa from 'papaparse';
 import _ from 'lodash';
 import { useState, useEffect, useMemo } from 'react';
 import { saveAs } from 'file-saver';
-
-const Card = ({ children, className = "" }) => (
-  <div className={`bg-white rounded-lg shadow-sm border border-gray-100 ${className}`}>
-    {children}
-  </div>
-);
+import ComparisonView from '../components/ComparisonView';
+import { Card } from '../components/Card';
 
 const StatsCard = ({ icon: Icon, label, value, className = "" }) => (
   <Card className={`p-4 ${className}`}>
@@ -47,7 +43,7 @@ export default function Dashboard() {
   const [filteredData, setFilteredData] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedGrade, setSelectedGrade] = useState('all');
-  const [selectedStudent, setSelectedStudent] = useState(null);
+  const [selectedStudents, setSelectedStudents] = useState([]);
   const [activeTab, setActiveTab] = useState('overview');
   const [selectedLanguage, setSelectedLanguage] = useState('all');
   const [sortKey, setSortKey] = useState('Student Name');
@@ -108,7 +104,7 @@ export default function Dashboard() {
     setFilteredData(filtered);
   }, [data, searchQuery, selectedGrade, selectedLanguage]);
 
-  const languages = _.uniq(data.map(s => s['Home Language'])).filter(Boolean);
+  const languages = useMemo(() => _.uniq(data.map(s => s['Home Language'])).filter(Boolean), [data]);
 
   const getLevelCounts = () => {
     return filteredData.reduce((acc, student) => {
@@ -303,14 +299,42 @@ export default function Dashboard() {
     );
   };
 
+  // Helper function to assign colors to students
+  const getColor = (index) => {
+    const COLORS = ['#3b82f6', '#ef4444', '#10b981', '#f59e0b', '#8b5cf6', '#f43f5e'];
+    return COLORS[index % COLORS.length];
+  };
+
+  const handleSelectAll = () => {
+    setSelectedStudents(filteredData.map(student => student['Student Name']));
+  };
+
+  const handleClearSelection = () => {
+    setSelectedStudents([]);
+  };
+
+  const handleSelectStudent = (studentName) => {
+    setSelectedStudents(prev => {
+      if (prev.includes(studentName)) {
+        return prev.filter(name => name !== studentName);
+      } else {
+        return [...prev, studentName];
+      }
+    });
+  };
+
   const exportCSV = () => {
-    const csv = Papa.unparse(filteredData);
+    const csv = Papa.unparse(filteredData.filter(student => selectedStudents.includes(student['Student Name'])));
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     
     if (typeof window !== 'undefined') {
-      saveAs(blob, 'filtered_students.csv');
+      saveAs(blob, 'selected_students.csv');
     }
   };
+
+  const selectedStudentsData = useMemo(() => {
+    return data.filter(student => selectedStudents.includes(student['Student Name']));
+  }, [data, selectedStudents]);
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -399,6 +423,12 @@ export default function Dashboard() {
           >
             Progress Tracking
           </TabButton>
+          <TabButton 
+            active={activeTab === 'comparison'} 
+            onClick={() => setActiveTab('comparison')}
+          >
+            Comparison
+          </TabButton>
         </div>
 
         {/* Main Content */}
@@ -406,26 +436,48 @@ export default function Dashboard() {
           {/* Left Column: Student List */}
           <div className="col-span-4">
             <Card>
-              <div className="p-4 border-b">
+              <div className="p-4 border-b flex justify-between items-center">
                 <h2 className="font-semibold">Students</h2>
+                <div className="flex space-x-2">
+                  <button
+                    onClick={handleSelectAll}
+                    className="px-2 py-1 bg-green-500 text-white rounded"
+                  >
+                    Select All
+                  </button>
+                  <button
+                    onClick={handleClearSelection}
+                    className="px-2 py-1 bg-red-500 text-white rounded"
+                  >
+                    Clear Selection
+                  </button>
+                </div>
               </div>
               <div className="divide-y max-h-[600px] overflow-y-auto">
                 {filteredData.map((student, index) => (
                   <div
                     key={index}
                     className={`p-4 hover:bg-gray-50 cursor-pointer ${
-                      selectedStudent?.['Student Name'] === student['Student Name']
+                      selectedStudents.includes(student['Student Name'])
                         ? 'bg-blue-50'
                         : ''
                     }`}
-                    onClick={() => setSelectedStudent(student)}
+                    onClick={() => handleSelectStudent(student['Student Name'])}
                   >
                     <div className="flex justify-between items-start">
-                      <div>
-                        <p className="font-medium">{student['Student Name']}</p>
-                        <p className="text-sm text-gray-500">
-                          Grade {student['Grade Level']} | {student['Current EAL Level  (BEAL, IEAL, MEAL1, MEAL2)']}
-                        </p>
+                      <div className="flex items-center">
+                        <input
+                          type="checkbox"
+                          checked={selectedStudents.includes(student['Student Name'])}
+                          onChange={() => handleSelectStudent(student['Student Name'])}
+                          className="mr-2"
+                        />
+                        <div>
+                          <p className="font-medium">{student['Student Name']}</p>
+                          <p className="text-sm text-gray-500">
+                            Grade {student['Grade Level']} | {student['Current EAL Level  (BEAL, IEAL, MEAL1, MEAL2)']}
+                          </p>
+                        </div>
                       </div>
                       <div className="text-sm text-gray-500">
                         {student['Home Language']}
@@ -466,21 +518,24 @@ export default function Dashboard() {
                     </ResponsiveContainer>
                   </div>
                 </Card>
-                {selectedStudent && <StudentProfile student={selectedStudent} />}
+                {selectedStudents.length > 0 && (
+                  <ComparisonView selectedStudentsData={selectedStudentsData} />
+                )}
               </>
             )}
 
             {activeTab === 'languages' && <LanguageAnalysis />}
             {activeTab === 'progress' && <ProgressTracking />}
+            {activeTab === 'comparison' && <ComparisonView selectedStudentsData={selectedStudentsData} />}
           </div>
         </div>
 
         {/* Export Button */}
         <button
           onClick={exportCSV}
-          className="px-4 py-2 bg-blue-500 text-white rounded"
+          className="px-4 py-2 bg-blue-500 text-white rounded mt-4"
         >
-          Export CSV
+          Export Selected CSV
         </button>
       </div>
     </div>
