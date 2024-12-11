@@ -1,11 +1,14 @@
 import '../styles/globals.css'
 import { DataProvider } from '../context/DataContext'
+import { SessionProvider } from 'next-auth/react'
 
-function MyApp({ Component, pageProps }) {
+function MyApp({ Component, pageProps: { session, ...pageProps } }) {
   return (
-    <DataProvider>
-      <Component {...pageProps} />
-    </DataProvider>
+    <SessionProvider session={session}>
+      <DataProvider>
+        <Component {...pageProps} />
+      </DataProvider>
+    </SessionProvider>
   )
 }
 

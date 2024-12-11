@@ -9,15 +9,17 @@
   },
   "dependencies": {
     "autoprefixer": "^10.4.16",
+    "bcryptjs": "^2.4.3",
     "file-saver": "^2.0.5",
     "lodash": "^4.17.21",
     "lucide-react": "^0.263.1",
     "next": "latest",
+    "next-auth": "^4.24.11",
     "papaparse": "^5.4.1",
     "postcss": "^8.4.31",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "recharts": "^2.10.3",
+    "recharts": "^2.14.1",
     "tailwindcss": "^3.3.5"
   },
   "devDependencies": {

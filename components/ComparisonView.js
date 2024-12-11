@@ -1,6 +1,28 @@
 import React from 'react';
 import { ResponsiveContainer, RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, LineChart, Line } from 'recharts';
-import { Card } from './Card'; // Ensure Card component exists
+import { Card } from './Card';
+
+/**
+ * Converts F&P Level to a numeric value.
+ * @param {string} level - The F&P Level letter.
+ * @returns {number} - Numeric representation.
+ */
+const fpToNum = (level) => {
+  if (!level) return 0;
+  const levels = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+  const index = levels.indexOf(level.toUpperCase());
+  return index !== -1 ? index + 1 : 0;
+};
+
+/**
+ * Assigns a color based on the index.
+ * @param {number} index 
+ * @returns {string} 
+ */
+const getColor = (index) => {
+  const COLORS = ['#2563EB', '#10B981', '#F59E0B', '#EF4444', '#3b82f6', '#f43f5e'];
+  return COLORS[index % COLORS.length];
+};
 
 const ComparisonView = ({ selectedStudentsData }) => {
   if (selectedStudentsData.length === 0) {
@@ -14,34 +36,27 @@ const ComparisonView = ({ selectedStudentsData }) => {
   // Prepare data for Radar Chart (Writing Level and F&P Level)
   const radarData = selectedStudentsData.map(student => ({
     name: student['Student Name'],
-    Writing: parseInt(student['Writing Level']) || 0,
-    FV: fpToNum(student['F&P Level']) || 0,
+    Writing: parseInt(student['Writing Level'], 10) || 0,
+    Reading: fpToNum(student['F&P Level']) || 0,
   }));
 
   // Prepare data for side-by-side WIDA scores
   const widaData = selectedStudentsData.map(student => ({
     name: student['Student Name'],
-    Writing: parseInt(student['Writing Level']) || 0,
+    Writing: parseInt(student['Writing Level'], 10) || 0,
     FP: fpToNum(student['F&P Level']) || 0,
   }));
-
-  // Helper function to convert F&P Level to numeric
-  const fpToNum = (level) => {
-    if (!level) return 0;
-    const levels = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
-    return levels.indexOf(level) + 1;
-  };
 
   return (
     <div className="space-y-6">
       <Card className="p-6">
-        <h3 className="text-lg font-semibold mb-4">WIDA Scores Comparison</h3>
+        <h3 className="text-lg font-semibold mb-4 text-text">WIDA Scores Comparison</h3>
         <div className="h-80">
           <ResponsiveContainer width="100%" height="100%">
             <RadarChart data={radarData}>
-              <PolarGrid />
-              <PolarAngleAxis dataKey="name" />
-              <PolarRadiusAxis />
+              <PolarGrid stroke="#d1d5db" />
+              <PolarAngleAxis dataKey="name" stroke="#1F2937" />
+              <PolarRadiusAxis stroke="#1F2937" />
               {selectedStudentsData.map((student, index) => (
                 <Radar
                   key={index}
@@ -58,53 +73,54 @@ const ComparisonView = ({ selectedStudentsData }) => {
       </Card>
 
       <Card className="p-6">
-        <h3 className="text-lg font-semibold mb-4">Side-by-Side WIDA Scores</h3>
+        <h3 className="text-lg font-semibold mb-4 text-text">Side-by-Side WIDA Scores</h3>
         <div className="h-80">
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={widaData}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="name" />
-              <YAxis />
-              <Tooltip />
+              <CartesianGrid strokeDasharray="3 3" stroke="#d1d5db" />
+              <XAxis dataKey="name" stroke="#1F2937" />
+              <YAxis stroke="#1F2937" />
+              <Tooltip 
+                contentStyle={{ 
+                  backgroundColor: 'white',
+                  border: '1px solid #d1d5db',
+                  borderRadius: '0.5rem',
+                  boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)'
+                }}
+              />
               <Legend />
-              <Bar dataKey="Writing" fill="#3b82f6" />
-              <Bar dataKey="FP" fill="#ef4444" />
+              <Bar dataKey="Writing" fill="#2563EB" />
+              <Bar dataKey="FP" fill="#10B981" />
             </BarChart>
           </ResponsiveContainer>
         </div>
       </Card>
 
       <Card className="p-6">
-        <h3 className="text-lg font-semibold mb-4">F&P Level Tracking</h3>
+        <h3 className="text-lg font-semibold mb-4 text-text">F&P Level Tracking</h3>
         <div className="h-80">
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={widaData}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="name" />
-              <YAxis />
+              <CartesianGrid strokeDasharray="3 3" stroke="#d1d5db" />
+              <XAxis dataKey="name" stroke="#1F2937" />
+              <YAxis stroke="#1F2937" />
               <Tooltip 
                 contentStyle={{ 
                   backgroundColor: 'white',
-                  border: '1px solid #e5e7eb',
+                  border: '1px solid #d1d5db',
                   borderRadius: '0.5rem',
                   boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)'
                 }}
               />
               <Legend />
-              <Line type="monotone" dataKey="Writing" stroke="#3b82f6" name="Writing Level" />
-              <Line type="monotone" dataKey="FP" stroke="#ef4444" name="F&P Level" />
+              <Line type="monotone" dataKey="Writing" stroke="#2563EB" name="Writing Level" />
+              <Line type="monotone" dataKey="FP" stroke="#10B981" name="F&P Level" />
             </LineChart>
           </ResponsiveContainer>
         </div>
       </Card>
     </div>
   );
-};
-
-// Helper function to assign colors to students
-const getColor = (index) => {
-  const COLORS = ['#3b82f6', '#ef4444', '#10b981', '#f59e0b', '#8b5cf6', '#f43f5e'];
-  return COLORS[index % COLORS.length];
 };
 
 export default ComparisonView; 

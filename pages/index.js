@@ -1,318 +1,89 @@
-import { 
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, 
-  LineChart, Line, RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
-  PieChart, Pie, Cell 
-} from 'recharts';
-import { Users, Search, Globe2, TrendingUp, BarChart2, BookOpen } from 'lucide-react';
-import Papa from 'papaparse';
+import React, { useState, useEffect, useMemo } from 'react';
+import { useSession, signIn, signOut } from 'next-auth/react';
 import _ from 'lodash';
-import { useState, useEffect, useMemo } from 'react';
-import { saveAs } from 'file-saver';
+import {
+  ResponsiveContainer,
+  BarChart,
+  CartesianGrid,
+  XAxis,
+  YAxis,
+  Tooltip,
+  Bar,
+} from 'recharts';
+import Timeline from '../components/Timeline';
+import GrowthIndicators from '../components/GrowthIndicators';
+import DataGrid from '../components/DataGrid';
+import Card from '../components/Card';
 import ComparisonView from '../components/ComparisonView';
-import { Card } from '../components/Card';
-
-const StatsCard = ({ icon: Icon, label, value, className = "" }) => (
-  <Card className={`p-4 ${className}`}>
-    <div className="flex items-center space-x-3">
-      <div className="bg-blue-50 p-2 rounded-lg">
-        <Icon className="h-6 w-6 text-blue-500" />
-      </div>
-      <div>
-        <p className="text-sm text-gray-500">{label}</p>
-        <p className="text-xl font-semibold">{value}</p>
-      </div>
-    </div>
-  </Card>
-);
-
-const TabButton = ({ active, children, onClick }) => (
-  <button
-    className={`px-4 py-2 rounded-lg ${
-      active 
-        ? 'bg-blue-50 text-blue-600 font-medium' 
-        : 'text-gray-600 hover:bg-gray-50'
-    }`}
-    onClick={onClick}
-  >
-    {children}
-  </button>
-);
+import { StatsCard } from '../components/StatsCard';
+import Search from '../components/Search';
+import TabButton from '../components/TabButton';
+import UsersIcon from '../components/icons/Users';
+import Globe2Icon from '../components/icons/Globe2';
+import BarChart2Icon from '../components/icons/BarChart2';
+import TrendingUpIcon from '../components/icons/TrendingUp';
 
 export default function Dashboard() {
+  const { data: session, status } = useSession();
+
+  // State hooks
   const [data, setData] = useState([]);
   const [filteredData, setFilteredData] = useState([]);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [selectedGrade, setSelectedGrade] = useState('all');
-  const [selectedStudents, setSelectedStudents] = useState([]);
-  const [activeTab, setActiveTab] = useState('overview');
-  const [selectedLanguage, setSelectedLanguage] = useState('all');
   const [sortKey, setSortKey] = useState('Student Name');
+  const [activeTab, setActiveTab] = useState('overview');
+  const [selectedStudents, setSelectedStudents] = useState([]);
+  const [selectedGrade, setSelectedGrade] = useState('all'); // Assuming you have this state
+  const [selectedLanguage, setSelectedLanguage] = useState('all');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [languages, setLanguages] = useState([]); // Assuming languages is fetched or defined somewhere
+  const [levelCounts, setLevelCounts] = useState({}); // Assuming this is calculated based on data
+  const [chartData, setChartData] = useState([]);
+  const [selectedStudentsData, setSelectedStudentsData] = useState([]); // Assuming this is managed somewhere
 
+  // useMemo hook
   const sortedData = useMemo(() => _.orderBy(filteredData, [sortKey], ['asc']), [filteredData, sortKey]);
 
+  // useEffect hook for fetching data
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const response = await fetch('/data/students.csv');
+        const response = await fetch('/api/students');
         if (!response.ok) {
           throw new Error('Network response was not ok');
         }
-        const csvText = await response.text();
-        Papa.parse(csvText, {
-          header: true,
-          skipEmptyLines: true,
-          complete: (results) => {
-            const processedData = results.data.map(row => ({
-              ...row,
-              'Grade Level': parseInt(row['Grade Level']) || 0,
-              'F&P Level': extractFPLevel(row['BOY 2024 (Writing, and F&P)']),
-              'Writing Level': extractWritingLevel(row['BOY 2024 (Writing, and F&P)'])
-            }));
-            setData(processedData);
-            setFilteredData(processedData);
-          },
-          error: (error) => {
-            console.error('Error parsing CSV:', error);
-          }
-        });
+        const result = await response.json();
+        setData(result.students);
+        setFilteredData(result.students);
+
+        // Example: Extract unique languages
+        const uniqueLanguages = [...new Set(result.students.map(student => student['Home Language']))];
+        setLanguages(uniqueLanguages);
+
+        // Example: Calculate level counts
+        const counts = result.students.reduce((acc, student) => {
+          const level = student['Current EAL Level  (BEAL, IEAL, MEAL1, MEAL2)'];
+          acc[level] = (acc[level] || 0) + 1;
+          return acc;
+        }, {});
+        setLevelCounts(counts);
+
+        // Example: Prepare chart data
+        const chart = [
+          { name: 'BEAL', students: counts['BEAL'] || 0 },
+          { name: 'IEAL', students: counts['IEAL'] || 0 },
+          { name: 'MEAL1', students: counts['MEAL1'] || 0 },
+          { name: 'MEAL2', students: counts['MEAL2'] || 0 },
+        ];
+        setChartData(chart);
       } catch (error) {
-        console.error('Fetch error:', error);
+        console.error('Error fetching student data:', error);
       }
     };
 
     fetchData();
   }, []);
 
-  const extractFPLevel = (text) => {
-    const match = text?.match(/[A-Z]/);
-    return match ? match[0] : null;
-  };
-
-  const extractWritingLevel = (text) => {
-    const match = text?.match(/W: (\d)/);
-    return match ? parseInt(match[1]) : null;
-  };
-
-  useEffect(() => {
-    const filtered = data.filter(student => {
-      const matchesGrade = selectedGrade === 'all' || student['Grade Level'].toString() === selectedGrade;
-      const matchesLanguage = selectedLanguage === 'all' || student['Home Language']?.includes(selectedLanguage);
-      const matchesSearch = !searchQuery || 
-        student['Student Name']?.toLowerCase().includes(searchQuery.toLowerCase());
-      return matchesGrade && matchesLanguage && matchesSearch;
-    });
-    setFilteredData(filtered);
-  }, [data, searchQuery, selectedGrade, selectedLanguage]);
-
-  const languages = useMemo(() => _.uniq(data.map(s => s['Home Language'])).filter(Boolean), [data]);
-
-  const getLevelCounts = () => {
-    return filteredData.reduce((acc, student) => {
-      const level = student['Current EAL Level  (BEAL, IEAL, MEAL1, MEAL2)'];
-      acc[level] = (acc[level] || 0) + 1;
-      return acc;
-    }, {});
-  };
-
-  const getLanguageAnalysis = () => {
-    const byLanguage = _.groupBy(filteredData, 'Home Language');
-    return Object.entries(byLanguage).map(([language, students]) => ({
-      language,
-      count: students.length,
-      averageWriting: _.meanBy(students, s => parseFloat(s['Writing Level']) || 0).toFixed(1),
-      levels: _.countBy(students, 'Current EAL Level  (BEAL, IEAL, MEAL1, MEAL2)')
-    }));
-  };
-
-  const getProgressData = () => {
-    const grades = _.groupBy(filteredData, 'Grade Level');
-    return Object.entries(grades).map(([grade, students]) => ({
-      grade: `Grade ${grade}`,
-      averageWriting: _.meanBy(students, s => parseFloat(s['Writing Level']) || 0).toFixed(1),
-      bealCount: students.filter(s => s['Current EAL Level  (BEAL, IEAL, MEAL1, MEAL2)'] === 'BEAL').length,
-      iealCount: students.filter(s => s['Current EAL Level  (BEAL, IEAL, MEAL1, MEAL2)'] === 'IEAL').length
-    }));
-  };
-
-  const levelCounts = getLevelCounts();
-  const chartData = Object.entries(levelCounts).map(([level, count]) => ({
-    name: level,
-    students: count
-  }));
-
-  const StudentProfile = ({ student }) => {
-    if (!student) return null;
-
-    const getProgressIndicator = (level) => {
-      const indicators = {
-        'BEAL': ['Writing Level 2', 'Basic F&P Progress', 'L1 Support'],
-        'IEAL': ['Writing Level 3-4', 'Grade Level F&P', 'Reduced Support'],
-        'MEAL1': ['Writing Level 4-5', 'Above Grade F&P', 'Monitor Only'],
-        'MEAL2': ['Writing Level 5', 'Advanced F&P', 'Exit Ready']
-      };
-      return indicators[student['Current EAL Level  (BEAL, IEAL, MEAL1, MEAL2)']] || [];
-    };
-
-    const progressData = [
-      { name: 'Writing', value: parseInt(student['Writing Level']) || 0, fullMark: 5 },
-      { name: 'Reading', value: fpToNum(student['F&P Level']) || 0, fullMark: 26 }
-    ];
-
-    return (
-      <Card className="p-6">
-        <div className="flex items-center justify-between mb-6">
-          <div>
-            <h3 className="text-xl font-semibold">{student['Student Name']}</h3>
-            <p className="text-gray-500">Grade {student['Grade Level']} | {student['Home Language']}</p>
-          </div>
-          <span className="px-3 py-1 bg-blue-50 text-blue-600 rounded-full text-sm font-medium">
-            {student['Current EAL Level  (BEAL, IEAL, MEAL1, MEAL2)']}
-          </span>
-        </div>
-
-        <div className="grid grid-cols-2 gap-6">
-          <div>
-            <h4 className="font-medium mb-2">Current Levels</h4>
-            <div className="space-y-2">
-              <div className="flex justify-between items-center">
-                <span className="text-gray-500">Writing Level</span>
-                <span className="font-medium">{student['Writing Level'] || 'N/A'}</span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-gray-500">F&P Level</span>
-                <span className="font-medium">{student['F&P Level'] || 'N/A'}</span>
-              </div>
-            </div>
-
-            <h4 className="font-medium mt-4 mb-2">Target Goals</h4>
-            <ul className="space-y-1">
-              {getProgressIndicator(student['Current EAL Level  (BEAL, IEAL, MEAL1, MEAL2)']).map((goal, index) => (
-                <li key={index} className="flex items-center text-sm">
-                  <span className="h-1.5 w-1.5 rounded-full bg-blue-500 mr-2"></span>
-                  {goal}
-                </li>
-              ))}
-            </ul>
-          </div>
-
-          <div className="h-48">
-            <ResponsiveContainer width="100%" height="100%">
-              <RadarChart data={progressData}>
-                <PolarGrid />
-                <PolarAngleAxis dataKey="name" />
-                <PolarRadiusAxis angle={30} domain={[0, 26]} />
-                <Radar name="Current" dataKey="value" stroke="#3b82f6" fill="#3b82f6" fillOpacity={0.6} />
-              </RadarChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-      </Card>
-    );
-  };
-
-  const fpToNum = (level) => {
-    if (!level) return 0;
-    const levels = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
-    return levels.indexOf(level) + 1;
-  };
-
-  const LanguageAnalysis = () => {
-    const data = getLanguageAnalysis();
-    const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444'];
-
-    return (
-      <div className="space-y-6">
-        <Card className="p-6">
-          <h3 className="text-lg font-semibold mb-4">Language Distribution</h3>
-          <div className="h-80">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie
-                  data={data}
-                  dataKey="count"
-                  nameKey="language"
-                  cx="50%"
-                  cy="50%"
-                  outerRadius={100}
-                  fill="#8884d8"
-                  label
-                >
-                  {data.map((entry, index) => (
-                    <Cell key={index} fill={COLORS[index % COLORS.length]} />
-                  ))}
-                </Pie>
-                <Tooltip />
-                <Legend />
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
-        </Card>
-
-        <Card className="p-6">
-          <h3 className="text-lg font-semibold mb-4">Average Writing Levels by Language</h3>
-          <div className="h-80">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={data}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="language" />
-                <YAxis />
-                <Tooltip />
-                <Bar dataKey="averageWriting" fill="#3b82f6" />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </Card>
-      </div>
-    );
-  };
-
-  const ProgressTracking = () => {
-    const data = getProgressData();
-
-    return (
-      <div className="space-y-6">
-        <Card className="p-6">
-          <h3 className="text-lg font-semibold mb-4">Progress by Grade Level</h3>
-          <div className="h-80">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={data}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="grade" />
-                <YAxis />
-                <Tooltip 
-                  contentStyle={{ 
-                    backgroundColor: 'white',
-                    border: '1px solid #e5e7eb',
-                    borderRadius: '0.5rem',
-                    boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)'
-                  }}
-                />
-                <Legend />
-                <Line type="monotone" dataKey="averageWriting" stroke="#3b82f6" name="Avg Writing Level" />
-                <Line type="monotone" dataKey="bealCount" stroke="#ef4444" name="BEAL Students" />
-                <Line type="monotone" dataKey="iealCount" stroke="#10b981" name="IEAL Students" />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
-        </Card>
-      </div>
-    );
-  };
-
-  // Helper function to assign colors to students
-  const getColor = (index) => {
-    const COLORS = ['#3b82f6', '#ef4444', '#10b981', '#f59e0b', '#8b5cf6', '#f43f5e'];
-    return COLORS[index % COLORS.length];
-  };
-
-  const handleSelectAll = () => {
-    setSelectedStudents(filteredData.map(student => student['Student Name']));
-  };
-
-  const handleClearSelection = () => {
-    setSelectedStudents([]);
-  };
-
+  // Function to handle student selection
   const handleSelectStudent = (studentName) => {
     setSelectedStudents(prev => {
       if (prev.includes(studentName)) {
@@ -323,29 +94,60 @@ export default function Dashboard() {
     });
   };
 
-  const exportCSV = () => {
-    const csv = Papa.unparse(filteredData.filter(student => selectedStudents.includes(student['Student Name'])));
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    
-    if (typeof window !== 'undefined') {
-      saveAs(blob, 'selected_students.csv');
-    }
+  // Function to handle select all
+  const handleSelectAll = () => {
+    setSelectedStudents(data.map(student => student['Student Name']));
   };
 
-  const selectedStudentsData = useMemo(() => {
-    return data.filter(student => selectedStudents.includes(student['Student Name']));
-  }, [data, selectedStudents]);
+  // Function to handle clear selection
+  const handleClearSelection = () => {
+    setSelectedStudents([]);
+  };
+
+  // Function to export CSV
+  const exportCSV = () => {
+    // Implement CSV export logic here
+    alert('Exporting CSV...');
+  };
+
+  // Ensure hooks are not called conditionally
+  if (status === 'loading') {
+    return <div className="flex justify-center items-center h-screen">Loading...</div>;
+  }
+
+  if (!session) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="text-center">
+          <h2 className="text-2xl font-semibold mb-4">You are not signed in</h2>
+          <button
+            onClick={() => signIn()}
+            className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600"
+          >
+            Sign In
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Initialize growthData
+  const growthData = [
+    { label: 'Writing Improvement', value: '15%', trend: 'up' },
+    { label: 'Reading Proficiency', value: '5%', trend: 'down' },
+    // Add more data as needed
+  ];
 
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-7xl mx-auto p-8">
         {/* Header */}
-        <div className="flex items-center justify-between mb-8">
+        <div className="flex items-center justify-between mb-8">  
           <div>
             <h1 className="text-3xl font-bold text-gray-900">EAL Student Dashboard</h1>
             <p className="text-gray-500 mt-1">Tracking student progress and achievements</p>
           </div>
-          <div className="flex gap-4">
+          <div className="flex gap-4 items-center">
             <div className="relative">
               <Search className="absolute left-3 top-2.5 h-5 w-5 text-gray-400" />
               <input
@@ -353,13 +155,13 @@ export default function Dashboard() {
                 placeholder="Search students..."
                 className="pl-10 pr-4 py-2 border rounded-lg w-64 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
+                onChange={(e) => setSearchQuery(e.target.value)}  
               />
             </div>
             <select
               className="border rounded-lg px-4 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
               value={selectedGrade}
-              onChange={(e) => setSelectedGrade(e.target.value)}
+              onChange={(e) => setSelectedGrade(e.target.value)}  
             >
               <option value="all">All Grades</option>
               {[1, 2, 3, 4, 5].map(grade => (
@@ -373,35 +175,41 @@ export default function Dashboard() {
             >
               <option value="all">All Languages</option>
               {languages.map(lang => (
-                <option key={lang} value={lang}>{lang}</option>
+                <option key={lang} value={lang}>{lang}</option>   
               ))}
             </select>
+            <button
+              onClick={() => signOut()}
+              className="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600"
+            >
+              Sign Out
+            </button>
           </div>
         </div>
 
         {/* Stats Overview */}
         <div className="grid grid-cols-4 gap-4 mb-6">
           <StatsCard 
-            icon={Users} 
+            icon={UsersIcon} 
             label="Total Students" 
             value={filteredData.length}
           />
           <StatsCard 
-            icon={Globe2} 
+            icon={Globe2Icon} 
             label="Languages" 
             value={languages.length}
           />
           <StatsCard 
-            icon={BarChart2} 
+            icon={BarChart2Icon} 
             label="BEAL Students" 
             value={levelCounts['BEAL'] || 0}
           />
           <StatsCard 
-            icon={TrendingUp} 
+            icon={TrendingUpIcon} 
             label="IEAL Students" 
             value={levelCounts['IEAL'] || 0}
           />
-        </div>        
+        </div>
 
         {/* Tabs */}
         <div className="flex space-x-2 mb-6">
@@ -411,20 +219,20 @@ export default function Dashboard() {
           >
             Overview
           </TabButton>
-          <TabButton 
-            active={activeTab === 'languages'} 
+          <TabButton
+            active={activeTab === 'languages'}
             onClick={() => setActiveTab('languages')}
           >
             Language Analysis
           </TabButton>
-          <TabButton 
-            active={activeTab === 'progress'} 
+          <TabButton
+            active={activeTab === 'progress'}
             onClick={() => setActiveTab('progress')}
           >
             Progress Tracking
           </TabButton>
-          <TabButton 
-            active={activeTab === 'comparison'} 
+          <TabButton
+            active={activeTab === 'comparison'}
             onClick={() => setActiveTab('comparison')}
           >
             Comparison
@@ -437,54 +245,63 @@ export default function Dashboard() {
           <div className="col-span-4">
             <Card>
               <div className="p-4 border-b flex justify-between items-center">
-                <h2 className="font-semibold">Students</h2>
+                <h2 className="font-semibold text-lg text-text">Students</h2>
                 <div className="flex space-x-2">
                   <button
                     onClick={handleSelectAll}
-                    className="px-2 py-1 bg-green-500 text-white rounded"
+                    className="px-3 py-1 bg-secondary text-white rounded hover:bg-secondary-600 transition"
                   >
                     Select All
                   </button>
                   <button
                     onClick={handleClearSelection}
-                    className="px-2 py-1 bg-red-500 text-white rounded"
+                    className="px-3 py-1 bg-warning text-white rounded hover:bg-warning-600 transition"
                   >
-                    Clear Selection
+                    Clear
                   </button>
                 </div>
               </div>
               <div className="divide-y max-h-[600px] overflow-y-auto">
-                {filteredData.map((student, index) => (
-                  <div
-                    key={index}
-                    className={`p-4 hover:bg-gray-50 cursor-pointer ${
-                      selectedStudents.includes(student['Student Name'])
-                        ? 'bg-blue-50'
-                        : ''
-                    }`}
-                    onClick={() => handleSelectStudent(student['Student Name'])}
-                  >
-                    <div className="flex justify-between items-start">
-                      <div className="flex items-center">
-                        <input
-                          type="checkbox"
-                          checked={selectedStudents.includes(student['Student Name'])}
-                          onChange={() => handleSelectStudent(student['Student Name'])}
-                          className="mr-2"
-                        />
-                        <div>
-                          <p className="font-medium">{student['Student Name']}</p>
-                          <p className="text-sm text-gray-500">
-                            Grade {student['Grade Level']} | {student['Current EAL Level  (BEAL, IEAL, MEAL1, MEAL2)']}
-                          </p>
+                {filteredData.length === 0 ? (
+                  <div className="p-4 text-center text-gray-500">
+                    No students found.
+                  </div>
+                ) : (
+                  filteredData.map((student, index) => (
+                    <div
+                      key={index}
+                      className={`p-4 hover:bg-gray-50 cursor-pointer ${
+                        selectedStudents.includes(student['Student Name'])
+                          ? 'bg-primary-50'
+                          : ''
+                      }`}
+                      onClick={() => handleSelectStudent(student['Student Name'])}
+                    >
+                      <div className="flex justify-between items-start">
+                        <div className="flex items-center">
+                          <input
+                            type="checkbox"
+                            checked={selectedStudents.includes(student['Student Name'])}
+                            onChange={(e) => {
+                              e.stopPropagation(); // Prevent triggering the parent onClick
+                              handleSelectStudent(student['Student Name']);
+                            }}
+                            className="mr-2 h-4 w-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500"
+                          />
+                          <div>
+                            <p className="font-medium text-text">{student['Student Name']}</p>
+                            <p className="text-sm text-gray-500">
+                              Grade {student['Grade Level']} | {student['Current EAL Level  (BEAL, IEAL, MEAL1, MEAL2)']}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="text-sm text-gray-500">
+                          {student['Home Language']}
                         </div>
                       </div>
-                      <div className="text-sm text-gray-500">
-                        {student['Home Language']}
-                      </div>
                     </div>
-                  </div>
-                ))}
+                  ))
+                )}
               </div>
             </Card>
           </div>
@@ -493,6 +310,8 @@ export default function Dashboard() {
           <div className="col-span-8">
             {activeTab === 'overview' && (
               <>
+                <Timeline />
+                <GrowthIndicators growthData={growthData} />
                 <Card className="p-6 mb-6">
                   <h2 className="text-lg font-semibold mb-4">EAL Level Distribution</h2>
                   <div className="h-80">
@@ -509,8 +328,8 @@ export default function Dashboard() {
                             boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)'
                           }}
                         />
-                        <Bar 
-                          dataKey="students" 
+                        <Bar
+                          dataKey="students"
                           fill="#3b82f6"
                           radius={[4, 4, 0, 0]}
                         />
@@ -521,11 +340,12 @@ export default function Dashboard() {
                 {selectedStudents.length > 0 && (
                   <ComparisonView selectedStudentsData={selectedStudentsData} />
                 )}
+                <DataGrid />
               </>
             )}
 
-            {activeTab === 'languages' && <LanguageAnalysis />}
-            {activeTab === 'progress' && <ProgressTracking />}
+            {activeTab === 'languages' && <LanguageAnalysis />}   
+            {activeTab === 'progress' && <ProgressTracking />}    
             {activeTab === 'comparison' && <ComparisonView selectedStudentsData={selectedStudentsData} />}
           </div>
         </div>
