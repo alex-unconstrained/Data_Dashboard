@@ -1,62 +1,14 @@
-import React, { useEffect, useState } from 'react';
+import React from 'react';
+import Card from './Card';
 import EditableCell from './EditableCell';
-import { Card } from './Card';
 
-export function DataGrid({ children }) {
-  const [students, setStudents] = useState([]);
-  const [loading, setLoading] = useState(true);
-
-  // Fetch student data from the API
-  const fetchStudents = async () => {
-    try {
-      const res = await fetch('/api/students');
-      if (res.ok) {
-        const data = await res.json();
-        setStudents(data.students);
-      } else {
-        console.error('Failed to fetch students');
-      }
-    } catch (error) {
-      console.error('Error fetching students:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchStudents();
-  }, []);
-
-  // Handle save/update
-  const handleSave = async (studentName, field, value) => {
-    try {
-      const res = await fetch('/api/students', {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ studentName, field, value })
-      });
-      if (res.ok) {
-        // Update the state locally
-        setStudents(prev => prev.map(student => 
-          student['Student Name'] === studentName
-            ? { ...student, [field]: value }
-            : student
-        ));
-      } else {
-        const errorData = await res.json();
-        console.error('Failed to update:', errorData.message);
-        alert(`Update failed: ${errorData.message}`);
-      }
-    } catch (error) {
-      console.error('Error updating student:', error);
-      alert('An error occurred while updating the student.');
-    }
-  };
-
+export function DataGrid({ students, loading, error, onSave }) {
   if (loading) {
     return <div>Loading data...</div>;
+  }
+
+  if (error) {
+    return <div>Error: {error}</div>;
   }
 
   return (
@@ -68,7 +20,7 @@ export function DataGrid({ children }) {
             <tr>
               <th className="px-4 py-2 border-b">Student Name</th>
               <th className="px-4 py-2 border-b">Grade Level</th>
-              <th className="px-4 py-2 border-b">Current EAL Level (BEAL, IEAL, MEAL1, MEAL2)</th>
+              <th className="px-4 py-2 border-b">Current EAL Level</th>
               <th className="px-4 py-2 border-b">Writing Level</th>
               <th className="px-4 py-2 border-b">F&P Level</th>
               <th className="px-4 py-2 border-b">Comments</th>
@@ -81,29 +33,29 @@ export function DataGrid({ children }) {
                 <td className="px-4 py-2 border-b">{student['Student Name']}</td>
                 <td className="px-4 py-2 border-b">{student['Grade Level']}</td>
                 <EditableCell
-                  value={student['Current EAL Level  (BEAL, IEAL, MEAL1, MEAL2)']}
+                  value={student['Current EAL Level']}
                   row={student}
-                  column={{ id: 'Current EAL Level  (BEAL, IEAL, MEAL1, MEAL2)' }}
-                  onSave={handleSave}
+                  column={{ id: 'Current EAL Level' }}
+                  onSave={onSave}
                   options={['BEAL', 'IEAL', 'MEAL1', 'MEAL2']}
                 />
                 <EditableCell
                   value={student['Writing Level']}
                   row={student}
                   column={{ id: 'Writing Level' }}
-                  onSave={handleSave}
+                  onSave={onSave}
                 />
                 <EditableCell
                   value={student['F&P Level']}
                   row={student}
                   column={{ id: 'F&P Level' }}
-                  onSave={handleSave}
+                  onSave={onSave}
                 />
                 <EditableCell
                   value={student['Comments']}
                   row={student}
                   column={{ id: 'Comments' }}
-                  onSave={handleSave}
+                  onSave={onSave}
                 />
               </tr>
             ))}
@@ -112,6 +64,6 @@ export function DataGrid({ children }) {
       </div>
     </Card>
   );
-};
+}
 
 export default DataGrid; 

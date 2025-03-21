@@ -13,7 +13,7 @@ const users = [
   // Add more users as needed
 ];
 
-export default NextAuth({
+export const authOptions = {
   providers: [
     CredentialsProvider({
       name: 'Credentials',
@@ -37,4 +37,6 @@ export default NextAuth({
     signIn: '/auth/signin',
   },
   secret: process.env.NEXTAUTH_SECRET,
-}); 
+};
+
+export default NextAuth(authOptions); 

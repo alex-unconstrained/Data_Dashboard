@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import { Check, X } from 'lucide-react';
 
 const EditableCell = ({ value: initialValue, row, column, onSave, options }) => {
   const [value, setValue] = useState(initialValue);
@@ -7,22 +6,13 @@ const EditableCell = ({ value: initialValue, row, column, onSave, options }) => 
   const [error, setError] = useState('');
 
   const validate = (val) => {
-    // Implement validation based on the column
-    if (column.id === 'Current EAL Level  (BEAL, IEAL, MEAL1, MEAL2)') {
+    if (column.id === 'Current EAL Level') {
       const validLevels = ['BEAL', 'IEAL', 'MEAL1', 'MEAL2'];
       if (!validLevels.includes(val)) {
         return `Invalid EAL Level. Valid options: ${validLevels.join(', ')}`;
       }
     }
-
-    // Add more validation rules as needed for other fields
-    if (column.id === 'Writing Level' || column.id === 'F&P Level') {
-      const num = parseInt(val, 10);
-      if (isNaN(num) || num < 0) {
-        return `${column.id} must be a positive number.`;
-      }
-    }
-
+    // Add more validation rules as needed
     return '';
   };
 
@@ -37,42 +27,53 @@ const EditableCell = ({ value: initialValue, row, column, onSave, options }) => 
     setIsEditing(false);
   };
 
+  const handleKeyDown = (e) => {
+    if (e.key === 'Enter') {
+      handleSave();
+    } else if (e.key === 'Escape') {
+      setValue(initialValue);
+      setIsEditing(false);
+    }
+  };
+
   return (
     <td className="px-4 py-2 border-b">
       {isEditing ? (
-        <div className="flex items-center space-x-2">
+        <div>
           {options ? (
             <select
               value={value}
               onChange={(e) => setValue(e.target.value)}
-              className="border rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              onBlur={handleSave}
+              className="border rounded px-2 py-1 w-full"
+              autoFocus
             >
-              <option value="">Select</option>
-              {options.map(opt => (
-                <option key={opt} value={opt}>{opt}</option>
+              {options.map((option) => (
+                <option key={option} value={option}>
+                  {option}
+                </option>
               ))}
             </select>
           ) : (
             <input
-              type="text"
               value={value}
               onChange={(e) => setValue(e.target.value)}
-              className="border rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              onBlur={handleSave}
+              onKeyDown={handleKeyDown}
+              className="border rounded px-2 py-1 w-full"
+              autoFocus
             />
           )}
-          <button onClick={handleSave} className="text-green-500 hover:text-green-700">
-            <Check size={16} />
-          </button>
-          <button onClick={() => { setIsEditing(false); setValue(initialValue); setError(''); }} className="text-red-500 hover:text-red-700">
-            <X size={16} />
-          </button>
+          {error && <div className="text-red-500 text-sm">{error}</div>}
         </div>
       ) : (
-        <div onClick={() => setIsEditing(true)} className="cursor-pointer">
-          {value || '—'}
+        <div
+          onClick={() => setIsEditing(true)}
+          className="cursor-pointer hover:bg-gray-100 p-2"
+        >
+          {value}
         </div>
       )}
-      {error && <p className="text-red-500 text-xs mt-1">{error}</p>}
     </td>
   );
 };

@@ -1,9 +1,10 @@
-import { getSession } from 'next-auth/react';
+import { getServerSession } from 'next-auth/next';
+import { authOptions } from './auth/[...nextauth]';
 import fs from 'fs';
 import path from 'path';
 import Papa from 'papaparse';
 
-const CSV_FILE_PATH = path.join(process.cwd(), 'data', 'students.csv');
+const CSV_FILE_PATH = path.join(process.cwd(), 'public', 'data', 'students.csv');
 
 /**
  * Reads the students CSV file and returns data as JSON.
@@ -27,7 +28,9 @@ const writeStudentData = (data) => {
 };
 
 export default async function handler(req, res) {
-  const session = await getSession({ req });
+  const session = await getServerSession(req, res, authOptions);
+
+  console.log('Session in API route:', session);
 
   if (!session) {
     res.status(401).json({ message: 'Unauthorized' });
